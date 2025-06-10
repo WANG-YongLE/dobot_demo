@@ -9,11 +9,14 @@ from std_msgs.msg import Float32MultiArray
 import time
 from trajectory_msgs.msg import JointTrajectoryPoint
 from dobot_demo.model import DeviceDataTypeEnum
+from std_msgs.msg import String
+
 
 class adderClient(Node):
     def __init__(self, name):
         super().__init__(name)
         self.EnableRobot_l = self.create_client(EnableRobot, '/dobot_bringup_ros2/srv/EnableRobot')
+        self.DisableRobot_l = self.create_client(DisableRobot, '/dobot_bringup_ros2/srv/DisableRobot')
         self.MovJ_l = self.create_client(MovJ, '/dobot_bringup_ros2/srv/MovJ')
         self.SpeedFactor_l = self.create_client(SpeedFactor, '/dobot_bringup_ros2/srv/SpeedFactor')
         self.MovL_l = self.create_client(MovL, '/dobot_bringup_ros2/srv/MovL')
@@ -21,9 +24,21 @@ class adderClient(Node):
         self.DI_l = self.create_client(DI, '/dobot_bringup_ros2/srv/DI')
         self.GetAngle_l = self.create_client(GetAngle, '/dobot_bringup_ros2/srv/GetAngle')
         self.GetDOGroup_l = self.create_client(GetDOGroup, '/dobot_bringup_ros2/srv/GetDOGroup')
+        self.ok=False
         while not self.EnableRobot_l.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
-
+        
+        self.suscriber_ok = self.create_subscription(
+            String,
+            "/OK",
+            self.listener_callback,
+            10
+        )
+    def listener_callback(self, msg):
+        if(self.ok is False):
+            self.initialization()
+        else:
+            self.shutdown()
     def initialization(self):
         response = self.EnableRobot_l.call_async(EnableRobot.Request())
         print(response)
@@ -32,8 +47,16 @@ class adderClient(Node):
         response = self.SpeedFactor_l.call_async(spe)
         self.DO(1, 1)  # DO1 = ORG    
         self.DO(3, 1)
+        self.ok=True
  
         print(response)
+    def shutdown(self):
+        response = self.DisableRobot_l.call_async(DisableRobot.Request())
+        print("關閉機器人")
+        print(response)
+        self.ok=False
+     
+        
 
     def point(self, Move, X_j1, Y_j2, Z_j3, RX_j4, RY_j5, RZ_j6):
         if Move == "MovJ":
@@ -146,7 +169,6 @@ class RobotArmMonitor(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = adderClient('adder_client')
-    node.initialization()
     node.GetDOGroup()
     monitor = RobotArmMonitor(node)
 
